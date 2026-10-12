@@ -1,0 +1,4 @@
+interface:
+  display_name: "QE / EPW 输入助手"
+  short_description: "生成并检查 QE、EPW 输入，核对版本、单位、网格和计算阶段"
+  default_prompt: "Use $qe-epw to prepare version-matched QE and EPW inputs for this calculation."

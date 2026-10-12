@@ -1,0 +1,86 @@
+{
+  "versions": {
+    "qe": "7.3.1",
+    "epw": "5.8.1"
+  },
+  "notes": "Format example for nonmagnetic FCC Cu with a 19-electron NC pseudopotential; grids, cutoff, windows and projections still require validation.",
+  "material_type": "metal",
+  "prefix": "cu",
+  "outdir": "./out",
+  "pseudo_dir": "./pseudo",
+  "dvscf_dir": "./save",
+  "species": [
+    {
+      "label": "Cu",
+      "mass": 63.546,
+      "pseudo": "Cu_ONCV_PBE-1.2.upf"
+    }
+  ],
+  "positions": [
+    [
+      "Cu",
+      0,
+      0,
+      0
+    ]
+  ],
+  "system": {
+    "ibrav": 2,
+    "A": 3.6332,
+    "ecutwfc": 80,
+    "occupations": "smearing",
+    "smearing": "mp",
+    "degauss": 0.02
+  },
+  "electrons": {
+    "conv_thr": 1e-10
+  },
+  "scf_kgrid": [
+    16,
+    16,
+    16
+  ],
+  "nscf_kgrid": [
+    12,
+    12,
+    12
+  ],
+  "qgrid": [
+    4,
+    4,
+    4
+  ],
+  "fine_kgrid": [
+    20,
+    20,
+    20
+  ],
+  "fine_qgrid": [
+    20,
+    20,
+    20
+  ],
+  "nscf_nbnd": 20,
+  "ph": {
+    "tr2_ph": 1e-14
+  },
+  "epw": {
+    "nbndsub": 6,
+    "bands_skipped": "exclude_bands = 1-4",
+    "proj(1)": "Cu:s",
+    "proj(2)": "Cu:d",
+    "num_iter": 500,
+    "dis_win_min": 8,
+    "dis_win_max": 30,
+    "dis_froz_min": 10,
+    "dis_froz_max": 18,
+    "phonselfen": true,
+    "a2f": true,
+    "fsthick": 0.5,
+    "degaussw": 0.05,
+    "ngaussw": 0,
+    "temps": [
+      300
+    ]
+  }
+}
