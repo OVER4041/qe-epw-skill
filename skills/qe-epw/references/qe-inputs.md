@@ -20,7 +20,9 @@
 
 字符串加引号，逻辑值写 .true./.false.，双精度指数可以用 d。数组可写为 name(1)=value。生成的科学输入优先使用 ASCII 文本和 LF 换行；注释用 !，引号内的 ! 属于字符串。
 
-SCF 可以使用对称性约化的自动网格。供 EPW 使用的 NSCF 通常需要完整均匀粗 k 网格；生成工具使用 K_POINTS crystal 显式列出 Gamma 中心网格，并设置 nosym/noinv。不要用高对称路径替代粗网格。生成器把权重归一到 1；QE 的 NSCF 特征值/波函数不依赖点权重，等权全写为 1 也合法。
+SCF 可以使用对称性约化的自动网格。供 EPW 使用的粗 k 点波函数需要完整均匀网格；生成工具使用 K_POINTS crystal 显式列出 Gamma 中心网格。默认 coarse_calculation='nscf' 并设置 nosym/noinv；案例 JSON 顶层可选 coarse_calculation='bands'，此时不自动加入 nosym/noinv，以保留 SCF 对称性，已有显式设置则沿用。文件名仍为 03_nscf.in。核对实际日志中的对称性、点数和顺序，不能只凭文件名判断计算模式。
+
+不要用 K_POINTS crystal_b 的高对称路径替代 EPW 粗网格。检查器允许单独的 bands 路径输入；同时提供 EPW 输入时，会要求完整均匀粗网格并检查形状和坐标。生成器把权重归一到 1；这类非自洽波函数阶段的特征值/波函数不依赖点权重，等权全写为 1 也合法。
 
 ## ph.x
 

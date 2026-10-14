@@ -85,17 +85,32 @@ def check_file(path):
             errors.append("epwread and wannierize cannot both be true")
         if get("epwread") is True and get("epbread") is True:
             errors.append("Do not mix Bloch and Wannier restart modes")
-        if get("assume_metal") is True and any(get(key) is True for key in ("scattering", "scattering_serta", "scattering_0rta", "iterative_bte")):
-            errors.append("Metal scattering/BTE is not implemented by this cached release's scattering_rate_q")
-        for lower, upper in (("dis_win_min", "dis_win_max"), ("dis_froz_min", "dis_froz_max")):
+        if get("assume_metal") is True:
+            # QE 7.3.1 ephwann_shuffle calls scattering_rate_q only on this path.
+            # IBTE uses print_ibte/transport_iter instead, including for metals.
+            etf_mem = get("etf_mem", 1)
+            if get("scattering") is True and get("iterative_bte") is not True and finite_number(etf_mem) and etf_mem < 3:
+                errors.append("Metal scattering with iterative_bte=.false. and etf_mem<3 reaches scattering_rate_q, which rejects metals in EPW 5.8.1")
+            if get("iterative_bte") is True:
+                warnings.append("Metal IBTE has a separate supported code path; EPW 6.0 reports a population fix, so verify the installed 5.8.1 build before trusting transport results")
+        if get("iterative_bte") is True:
+            for axis in (1, 2, 3):
+                if get("nkf" + str(axis), 0) != get("nqf" + str(axis), 0):
+                    errors.append("EPW 5.8.1 IBTE requires identical homogeneous fine k and q grids")
+                    break
+        if finite_number(get("dis_win_min")) and get("dis_win_min") > -9999:
+            warnings.append("EPW 5.8.1 ignores dis_win_min; review bands_skipped and the actual lower band manifold instead")
+        for lower, upper in (("dis_froz_min", "dis_froz_max"),):
             if finite_number(get(lower)) and finite_number(get(upper)) and get(lower) >= get(upper):
                 errors.append(lower + " must be below " + upper)
-        for outer, inner, sense in (("dis_win_min", "dis_froz_min", 1), ("dis_win_max", "dis_froz_max", -1)):
+        for outer, inner, sense in (("dis_win_max", "dis_froz_max", -1),):
             if finite_number(get(outer)) and finite_number(get(inner)) and sense * (get(inner) - get(outer)) < 0:
                 errors.append("Frozen window must lie inside the outer disentanglement window")
         if not get("epwread"):
             if not get("proj(1)") and not get("auto_projections") and not get("scdm_proj"):
                 warnings.append("Review Wannier projections before a fresh run")
+        else:
+            warnings.append("Check the matching EPW 5.8.1 restart bundle, including prefix.ukk; file existence does not verify compatibility")
         warnings.append("Check fine-grid, electronic broadening, band interpolation and frozen-state-count convergence")
     if program == "ph" and get_value(section, "ldisp") is True and not get_value(section, "fildvscf"):
         errors.append("PH grid run must save fildvscf for the EPW workflow")
@@ -125,20 +140,24 @@ def run(paths):
             data.append((report, groups))
     prefixes, directories = set(), set()
     nscf_data = []
+    grid_read_errors = []
     for report, groups in data:
         primary = groups.get("inputepw", groups.get("inputph", groups.get("control", {})))
         if "prefix" in primary:
             prefixes.add(str(get_value(primary, "prefix")))
         if "outdir" in primary:
             directories.add(str(get_value(primary, "outdir")))
-        if get_value(groups.get("control", {}), "calculation") == "nscf":
+        if get_value(groups.get("control", {}), "calculation") in ("nscf", "bands"):
             nbnd = get_value(groups.get("system", {}), "nbnd")
             try:
                 points = full_kpoints(Path(report["file"]).read_text(encoding="utf-8"))
-            except ValueError:
+            except ValueError as exc:
                 points = []
+                grid_read_errors.append(str(exc))
             nscf_data.append((nbnd, points))
     cross_errors = []
+    if any("inputepw" in groups for report, groups in data):
+        cross_errors.extend(grid_read_errors)
     if len(prefixes) > 1:
         cross_errors.append("prefix mismatch across supplied workflow files")
     if len(directories) > 1:
