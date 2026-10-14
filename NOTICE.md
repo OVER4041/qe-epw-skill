@@ -12,5 +12,8 @@ Primary references:
 - QE PW input documentation: https://www.quantum-espresso.org/Doc/INPUT_PW.html
 - QE PH input documentation: https://www.quantum-espresso.org/Doc/INPUT_PH.html
 - QEF release source: https://github.com/QEF/q-e/tree/qe-7.3.1
+- EPW release notes and metal IBTE fix: https://docs.epw-code.org/Releases.html
+- EPW 5.8.1 input and completion implementation: https://github.com/QEF/q-e/blob/qe-7.3.1/EPW/src/epw_readin.f90 and https://github.com/QEF/q-e/blob/qe-7.3.1/EPW/src/stop_epw.f90
+- Wannier90 convergence implementation: https://github.com/wannier-developers/wannier90/blob/v3.1.0/src/wannierise.F90
 
-References were checked on 2026-10-12. The online EPW input index is for v6.1; the included generator and keyword checks are fixed to QE 7.3.1 / EPW 5.8.1. Source hashes in the registry identify the snapshot and are not verification of a user's executable build.
+The keyword snapshot was checked on 2026-10-12; restart, completion and transport references were reviewed through 2026-10-14. The online EPW input index is for v6.1; the included generator and keyword checks are fixed to QE 7.3.1 / EPW 5.8.1. Source hashes in the registry identify the snapshot and are not verification of a user's executable build. Runtime checks cover only the documented basic restart layout and completion markers, not every EPW mode or physical convergence.

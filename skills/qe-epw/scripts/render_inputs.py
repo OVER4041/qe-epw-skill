@@ -74,6 +74,9 @@ def build(case, selected):
         if abs(volume) < 1e-12:
             raise ValueError("Cell vectors must span a nonzero volume")
     scf_grid = grid(case["scf_kgrid"], "scf_kgrid")
+    coarse_calculation = case.get("coarse_calculation", "nscf")
+    if coarse_calculation not in ("nscf", "bands"):
+        raise ValueError("coarse_calculation must be nscf or bands")
     coarse_k = grid(case["nscf_kgrid"], "nscf_kgrid")
     coarse_q = grid(case["qgrid"], "qgrid")
     if any(k % q for k, q in zip(coarse_k, coarse_q)):
@@ -98,12 +101,14 @@ def build(case, selected):
     for stage in selected:
         if stage in ("scf", "nscf"):
             control = dict(case.get("control", {}))
-            for key, value in {"calculation": stage, "prefix": prefix, "outdir": outdir, "pseudo_dir": case["pseudo_dir"]}.items():
+            calculation = coarse_calculation if stage == "nscf" else stage
+            for key, value in {"calculation": calculation, "prefix": prefix, "outdir": outdir, "pseudo_dir": case["pseudo_dir"]}.items():
                 consistent(control, key, value)
             chosen_system = dict(system)
             if stage == "nscf":
-                consistent(chosen_system, "nosym", True)
-                consistent(chosen_system, "noinv", True)
+                if coarse_calculation == "nscf":
+                    consistent(chosen_system, "nosym", True)
+                    consistent(chosen_system, "noinv", True)
                 consistent(chosen_system, "nbnd", case["nscf_nbnd"])
                 kpoints = ["K_POINTS crystal", str(coarse_count)]
                 weight = 1.0 / coarse_count
@@ -172,7 +177,7 @@ def main():
         for name, text in outputs.items():
             with (destination / name).open("x", encoding="utf-8", newline="\n") as stream:
                 stream.write(text)
-        manifest = {"versions": case["versions"], "notes": case.get("notes", ""), "nscf_kgrid": case["nscf_kgrid"], "qgrid": case["qgrid"], "files": list(outputs), "physics_convergence_verified": False}
+        manifest = {"versions": case["versions"], "notes": case.get("notes", ""), "coarse_calculation": case.get("coarse_calculation", "nscf"), "nscf_kgrid": case["nscf_kgrid"], "qgrid": case["qgrid"], "files": list(outputs), "physics_convergence_verified": False}
         (destination / "input-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         print(json.dumps({"output": str(destination), "files": list(outputs)}, ensure_ascii=False))
     except (ValueError, KeyError, OSError) as exc:

@@ -12,6 +12,7 @@ sys.path.insert(0, str(SKILL / "scripts"))
 from qe_epw_common import emit_namelist, parse_namelists, get_value
 from render_inputs import build, STAGES
 from check_inputs import run, full_kpoints
+from check_runtime import checkpoint, output
 
 
 class SkillChecks(unittest.TestCase):
@@ -51,6 +52,62 @@ class SkillChecks(unittest.TestCase):
         outputs = build(self.small_case(), STAGES)
         self.assertEqual(len(full_kpoints(outputs["03_nscf.in"])), 24)
         self.assertTrue(self.report(outputs)["passed"])
+
+    def test_full_bands_grid_preserves_symmetry_and_is_cross_checked(self):
+        case = self.small_case()
+        case['coarse_calculation'] = 'bands'
+        outputs = build(case, STAGES)
+        groups = parse_namelists(outputs['03_nscf.in'])
+        self.assertEqual(get_value(groups['control'], 'calculation'), 'bands')
+        self.assertNotIn('nosym', groups['system'])
+        self.assertNotIn('noinv', groups['system'])
+        self.assertTrue(self.report(outputs)['passed'])
+        outputs['04_epw_fresh.in'] = outputs['04_epw_fresh.in'].replace('nk1 = 2', 'nk1 = 3').replace('nk2 = 3', 'nk2 = 2')
+        self.assertFalse(self.report(outputs)['passed'])
+
+    def test_bands_path_is_not_an_epw_coarse_grid(self):
+        case = self.small_case()
+        case['coarse_calculation'] = 'bands'
+        outputs = build(case, STAGES)
+        outputs['03_nscf.in'] = outputs['03_nscf.in'].split('K_POINTS crystal')[0] + 'K_POINTS crystal_b\n2\n0 0 0 20\n0.5 0 0 1\n'
+        self.assertFalse(self.report(outputs)['passed'])
+        self.assertTrue(self.report({'bands.in': outputs['03_nscf.in']})['passed'])
+
+    def test_invalid_coarse_calculation_rejected(self):
+        case = self.small_case()
+        case['coarse_calculation'] = 'relax'
+        with self.assertRaisesRegex(ValueError, 'coarse_calculation'):
+            build(case, STAGES)
+
+    def test_ignored_outer_lower_window_warns_without_false_errors(self):
+        text = build(self.case, ['epw_fresh'])['04_epw_fresh.in']
+        text = text.replace('dis_win_min = -2', 'dis_win_min = 100')
+        result = self.report({'epw.in': text})
+        self.assertTrue(result['passed'], result)
+        self.assertTrue(any('ignores dis_win_min' in w for w in result['files'][0]['warnings']))
+
+    def test_restart_preflight_catches_missing_rotation_matrix(self):
+        for name in ['epwdata.fmt', 'vmedata.fmt', 'crystal.fmt', 'demo.epmatwp']:
+            (self.root / name).write_bytes(b'fixture')
+        self.assertFalse(checkpoint(self.root, 'demo')['passed'])
+        (self.root / 'demo.ukk').write_bytes(b'fixture')
+        result = checkpoint(self.root, 'demo')
+        self.assertTrue(result['passed'])
+        self.assertFalse(result['checkpoint_compatibility_verified'])
+        (self.root / 'demo.epmatwp').write_bytes(b'')
+        self.assertFalse(checkpoint(self.root, 'demo')['passed'])
+
+    def test_epw_completion_does_not_require_qe_marker(self):
+        text = 'Program EPW v.5.8.1\nTotal program execution\nfunctionality-dependent EPW.bib file.\n'
+        self.assertTrue(output('epw', text, 0)['passed'])
+        self.assertFalse(output('epw', text, 1)['passed'])
+        self.assertFalse(output('epw', text.replace('functionality-dependent EPW.bib file.', ''), 0)['passed'])
+        self.assertFalse(output('epw', text + 'Error in routine\n', 0)['passed'])
+        self.assertFalse(output('epw', text.replace('5.8.1', '6.1'), 0)['passed'])
+
+    def test_controlled_ph_stop_is_incomplete_despite_normal_exit(self):
+        self.assertTrue(output('ph', 'JOB DONE.\n', 0)['passed'])
+        self.assertFalse(output('ph', 'Maximum CPU time exceeded\nJOB DONE.\n', 0)['passed'])
 
     def test_weights_of_one_are_legal_nscf(self):
         outputs = build(self.small_case(), STAGES)
@@ -175,8 +232,23 @@ class SkillChecks(unittest.TestCase):
             with self.subTest(input=bad[:30]):
                 self.assertFalse(self.report({"epw.in": bad})["passed"])
 
-    def test_unsupported_metal_bte_rejected(self):
+    def test_legacy_noniterative_metal_scattering_rejected(self):
         self.assertFalse(self.epw_error("assume_metal = .true.\nscattering = .true.")["passed"])
+
+    def test_metal_ibte_not_rejected_by_legacy_routine_guard(self):
+        result = self.epw_error("assume_metal = .true.\nscattering = .true.\niterative_bte = .true.")
+        self.assertTrue(result["passed"], result)
+
+    def test_metal_spectrum_without_scattering_allowed(self):
+        self.assertTrue(self.epw_error("assume_metal = .true.")["passed"])
+
+    def test_ibte_mismatched_fine_grids_rejected(self):
+        outputs = build(self.small_case(), ["epw_fresh"])
+        text = outputs["04_epw_fresh.in"].rstrip().removesuffix("/")
+        text += "iterative_bte = .true.\n/\n"
+        # Unequal fine meshes trigger a runtime input error in epw_readin.
+        text = text.replace("nqf1 = " + str(self.case["fine_qgrid"][0]), "nqf1 = 1")
+        self.assertFalse(self.report({"epw.in": text})["passed"])
 
     def test_cli_generates_then_refuses_overwrite(self):
         case_path = self.root / "case.json"

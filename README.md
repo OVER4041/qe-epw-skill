@@ -5,7 +5,7 @@
 ## 已覆盖的版本与流程
 
 - QE **7.3.1** / EPW **5.8.1**：常规输入生成及静态检查。
-- SCF → PH / DFPT → dyn/dvscf 整理 → 完整粗 k 网格 NSCF → EPW 首次计算 → Wannier 数据重启。
+- SCF → PH / DFPT → dyn/dvscf 整理 → 完整粗 k 网格波函数 → EPW 首次计算 → Wannier 数据重启。
 - 参数单位注释、版本固定的关键字检查、完整 k 网格、粗 k/q 相容性、能窗及重启标志检查。
 - 金属输运的版本限制、结果单位转换和 Wiedemann–Franz 电子热导近似说明。
 
@@ -42,7 +42,22 @@ python skills/qe-epw/scripts/check_inputs.py generated-inputs
 
 输出包含五阶段输入及 `input-manifest.json`。案例 JSON 中的版本必须与缓存匹配；QE 能量以 Ry 输入，EPW 能窗及电子展宽用 eV，声子展宽用 meV，温度用 K。主要单位会写入输入注释。
 
+粗 k 网格阶段默认仍使用 `calculation='nscf'` 并设置 `nosym/noinv`。需要保留 SCF 的对称性时，可在案例 JSON 顶层设置 `"coarse_calculation": "bands"`：工具仍生成完整显式均匀网格，但不自动加入 `nosym/noinv`。文件名保留 `03_nscf.in`。供 EPW 使用的完整网格与高对称能带路径不同，检查器会在跨阶段检查中拒绝用路径替代粗网格。
+
+EPW 5.8.1 会忽略 `dis_win_min`；检查器提示这一行为，不再按该参数判断下边界。冻结窗口、上边界及 `bands_skipped` 仍需根据实际能带选择，详见 [EPW 参考](skills/qe-epw/references/epw-inputs.md)。
+
 Cu 示例是非磁性 FCC、19 电子 NC 赝势的格式样例；没有附带真实赝势、DFPT 数据或 checkpoint。其截断能、能窗、投影及网格不能视为已收敛参数。实际计算还需选择自己的运行环境、工作目录和调度资源。
+
+## 检查重启文件与运行结束
+
+新增工具只检查已核对的 EPW 5.8.1 基本重启布局：五个文件放在同一目录，以该目录作为工作目录，`outdir='./'`。极性、偶极矩、力常数等附加模式和其他文件布局需要另行核对。
+
+```sh
+python skills/qe-epw/scripts/check_runtime.py checkpoint --directory checkpoint --prefix demo
+python skills/qe-epw/scripts/check_runtime.py output --program epw --log epw.out --exit-code 0
+```
+
+重启检查要求非空的 `epwdata.fmt`、`vmedata.fmt`、`crystal.fmt`、`demo.epmatwp` 和 `demo.ukk`；文件存在仍不能证明版本、二进制格式、网格及带子空间兼容。运行检查必须传入同一次进程的实际退出码和独立日志；示例中的 `0` 需替换为实测值。EPW 5.8.1 使用其自己的结束信息，不能要求它打印 QE 的 `JOB DONE`。PH 因 `max_seconds` 停止可能保留可恢复数据，但请求的阶段尚未完成。详见 [阶段衔接与结果检查](skills/qe-epw/references/workflow.md)。
 
 ## 验证范围
 
@@ -50,7 +65,7 @@ Cu 示例是非磁性 FCC、19 电子 NC 赝势的格式样例；没有附带真
 python -B -m unittest discover -s tests -v
 ```
 
-23 项离线回归检查覆盖生成流程、版本边界、非法参数、非立方完整网格、粗 k/q 相容性、能窗、重启、数值及文件覆盖保护。GitHub Actions 在 Windows/Linux、Python 3.11/3.14 上运行同一组检查。
+33 项离线回归检查覆盖生成流程、版本边界、非法参数、非立方完整网格、粗 k/q 相容性、能窗、重启文件、程序结束检查、数值及文件覆盖保护。GitHub Actions 在 Windows/Linux、Python 3.11/3.14 上运行同一组检查。
 
 静态检查通过表示通过了本工具覆盖的条件，不代表完整 Fortran 解析、所有算法组合可运行或物理收敛。赝势、Wannier 能带/速度插值、冻结态数量和目标物性的收敛仍需验证。输入准备不会自动接入超算或提交作业；已有 [scnet-hpc MCP](https://github.com/OVER4041/mcp-scnet-hpc) 可作为单独的运行接口。
 
@@ -62,8 +77,8 @@ skills/qe-epw/
   agents/openai.yaml   Codex 显示信息
   assets/              案例配置与版本关键字注册表
   references/          QE、EPW、阶段依赖和版本说明
-  scripts/             输入生成与静态检查
+  scripts/             输入生成、静态检查和运行检查
 tests/                离线回归检查
 ```
 
-原创代码与说明采用 MIT 许可。上游资料来源和范围见 [NOTICE.md](NOTICE.md)。
+更新记录见 [CHANGELOG.md](CHANGELOG.md)。原创代码与说明采用 MIT 许可。上游资料来源和范围见 [NOTICE.md](NOTICE.md)。

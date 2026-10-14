@@ -27,7 +27,7 @@ description: 为 Quantum ESPRESSO 和 EPW 编写、修改和检查输入文件�
 
     python scripts/render_inputs.py --case /absolute/path/case.json --output /absolute/path/new-inputs
 
-case.json 的字段见 assets/case.example.json。工具生成 SCF、PH、完整 Gamma 中心粗 k 网格 NSCF、EPW 首次计算和 EPW 重启输入；可用 --stages 只生成需要的阶段。示例只是格式起点，需要按赝势和实际能带调整。
+case.json 的字段见 assets/case.example.json。工具生成 SCF、PH、完整 Gamma 中心粗 k 网格波函数、EPW 首次计算和 EPW 重启输入；可用 --stages 只生成需要的阶段。粗网格默认 nscf；顶层 coarse_calculation='bands' 可保留对称性并继续使用完整网格，不是高对称路径。示例只是格式起点，需要按赝势和实际能带调整。
 
     python scripts/check_inputs.py /absolute/path/new-inputs/*.in
 
@@ -37,15 +37,26 @@ Windows 下若 shell 不展开通配符，直接传目录：
 
 检查器检查版本固定的参数名、基本 Fortran 格式、重要标志组合和跨文件 prefix/outdir/grid。它不会证明收敛、能带插值正确、赝势合适或所有运行时组合可用。
 
+对于已核对的 EPW 5.8.1 基本重启布局，可用以下工具检查同目录文件是否非空；这不验证二进制兼容性，也不覆盖全部计算模式：
+
+    python scripts/check_runtime.py checkpoint --directory /absolute/path/checkpoint --prefix demo
+
+运行结束后，用同一次进程的实际退出码和独立日志检查程序结束；替换下面示例中的 0：
+
+    python scripts/check_runtime.py output --program epw --log /absolute/path/epw.out --exit-code 0
+
+完整使用范围和 Slurm 状态的解释见 references/workflow.md。
+
 ## 必须保留的工程约束
 
 - QE 截断能与 degauss 是 Ry；EPW degaussw/fsthick/能窗是 eV，degaussq 是 meV，temps 是 K。输入中写明单位，不能因为名字相近而沿用数值。
 - EPW 5.8.1 的 &inputepw 没有 ecutwfc、tempsmin 或 tempsmax。ecutwfc 属于 pw.x；temps 用温度数组，范围模式要按该版本规则设置。
 - PH 要保存非空 fildvscf，并为 EPW 整理与该次 DFPT 一致的 dyn/dvscf 数据。粗 k/q 网格要匹配 NSCF/PH，而不是细插值网格。
 - EPW 5.8.1 源码要求 npool × nimage = nproc。通常单 image 时使用 -nk 等于 MPI 进程数；其他版本先核实对应并行实现。
-- 重启输入不重做 Wannier；先核对 checkpoint 版本、prefix、粗网格和所需文件。不要仅凭文件存在就跨版本复用。
+- EPW 5.8.1 忽略 dis_win_min；不要把该值当作实际下边界。bands_skipped 和冻结窗口要结合原始能带选择。
+- 重启输入不重做 Wannier；先核对 checkpoint 版本、prefix、粗网格和所需文件，不能遗漏 prefix.ukk。不要仅凭文件存在就跨版本复用。
 - 本地检查和输出预览通过后，再根据用户授权提交。使用 scnet-hpc MCP 时先检测连接，选择已配置 qe/epw 环境，保留 #SBATCH 资源设置并使用稳定 request_id 去重。按工具实际参数操作，不给旧接口传不存在的 environment 参数。
-- 读结果时把数值完成、格式检查通过和物理收敛分开。费米能偏移、负谱/线宽、插值误差或未检查的网格应明确记录。
+- 读结果时把 Slurm 状态、进程结束和物理收敛分开。EPW 5.8.1 不以 JOB DONE 作为结束判据；费米能偏移、负谱/线宽、插值误差或未检查的网格应明确记录。
 - 电子热导的 WF 估计与独立热流求解、晶格热导不是同一结果；保留用户选择的近似并清楚标注。
 
 交付时提供输入文件、实际使用的版本、关键参数及单位、阶段依赖、检查结果和仍需验证的物理假设。
